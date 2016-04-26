@@ -379,18 +379,24 @@ var _initializeInteractiveDataDisplay = function () { // determines settings dep
 
         var _visibleRectConstraint = undefined;
         Object.defineProperty(this, "visibleRectConstraint", {
-            get: function () { return _isMaster ? _visibleRectConstraint : _master.visibleRectConstraint; },
+            get: function () { return _visibleRectConstraint;},//_isMaster ? _visibleRectConstraint : _master.visibleRectConstraint; },
             set: function (value) {
-                if (_isMaster) {
-                    if (_visibleRectConstraint !== value) {
-                        _visibleRectConstraint = value;
-                        //if (_visibleRectConstraint !== undefined) {
-                        //    _plot.updateLayout();
-                        //}
+                if (_visibleRectConstraint !== value) {
+                    _visibleRectConstraint = value;
+                    if (_visibleRectConstraint !== undefined) {
+                        _master.updateLayout();
                     }
-                } else {
-                    _master.visibleRectConstraint = value;
                 }
+                //if (_isMaster) {
+                //    if (_visibleRectConstraint !== value) {
+                //        _visibleRectConstraint = value;
+                //        if (_visibleRectConstraint !== undefined) {
+                //            _master.updateLayout();
+                //        }
+                //    }
+                //} else {
+                //    _master.visibleRectConstraint = value;
+                //}
 
             },
             configurable: false
@@ -828,6 +834,65 @@ var _initializeInteractiveDataDisplay = function () { // determines settings dep
         this.onIsRenderedChanged = function () {
         };
 
+        var mergeConstraints = function (plotRects) {
+            var newPlotRect = _plotRect;
+
+            for (var i = 0; i < plotRects.length; i++) {
+
+                if (plotRects[i].x > newPlotRect.x) {
+                    var segment = newPlotRect.width - (plotRects[i].x - newPlotRect.x);
+                    newPlotRect.x = plotRects[i].x;
+                    if (segment > 0 && segment < plotRects[i].width) {
+                        newPlotRect.width = segment;
+                    } else if (segment > 0) {
+                        newPlotRect.width = plotRects[i].width;
+                    } else {
+                        throw "Can't find suitable plot rect which matches plot constraint functions";
+                    }
+                } else {
+                    var segment = plotRects[i].width - (newPlotRect.x - plotRects[i].x);
+                    if (segment > 0 && segment < newPlotRect.width) {
+                        newPlotRect.width = segment;
+                    } else if (segment <= 0) {
+                        throw "Can't find suitable plot rect which matches plot constraint functions";
+                    }
+                }
+
+                if (plotRects[i].y > newPlotRect.y) {
+                    var segment = newPlotRect.height - (plotRects[i].y - newPlotRect.y);
+                    newPlotRect.y = plotRects[i].y;
+                    if (segment > 0 && segment < plotRects[i].height) {
+                        newPlotRect.height = segment;
+                    } else if (segment > 0) {
+                        newPlotRect.height = plotRects[i].height;
+                    } else {
+                        throw "Can't find suitable plot rect which matches plot constraint functions";
+                    }
+                } else {
+                    var segment = plotRects[i].height - (newPlotRect.y - plotRects[i].y);
+                    if (segment > 0 && segment < newPlotRect.height) {
+                        newPlotRect.height = segment;
+                    } else if (segment <= 0) {
+                        throw "Can't find suitable plot rect which matches plot constraint functions";
+                    }
+                }
+            }
+            return newPlotRect;
+        }
+
+        var calculateRectConstraint = function (plotrect, plot) {
+            var newPlotRect = undefined;
+            if (plot.children !== undefined && plot.children.length != 0) {
+                var plotRectsChildren = [];
+                $(plot.children).each(function () {
+                    plotRectsChildren.push(calculateRectConstraint(plotrect, $(this)[0]));
+                });
+                plotrect = mergeConstraints(plotRectsChildren);
+            }
+            newPlotRect = plot.visibleRectConstraint ? plot.visibleRectConstraint(plotrect): plotrect;
+            return newPlotRect;
+        };
+
         this.fit = function (screenSize, finalPath, plotScreenSizeChanged) {
             _width = screenSize.width;
             _height = screenSize.height;
@@ -843,7 +908,7 @@ var _initializeInteractiveDataDisplay = function () { // determines settings dep
 
 
                 if (_visibleRectConstraint !== undefined) {
-                    _plotRect = _visibleRectConstraint(_plotRect);
+                    _plotRect = calculateRectConstraint(_plotRect, _master);
                 }
 
                 var padding = aggregated.isDefault ? { left: 0, top: 0, bottom: 0, right: 0 } : _master.aggregatePadding();
@@ -892,7 +957,7 @@ var _initializeInteractiveDataDisplay = function () { // determines settings dep
 
 
                 if (_visibleRectConstraint !== undefined) {
-                    _plotRect = _visibleRectConstraint(_plotRect);
+                    _plotRect = calculateRectConstraint(_plotRect, _master);
                 }
 
                 if (padding !== undefined) {
